@@ -20,6 +20,4 @@ jobs:
           args: build-and-push --source=. --registry=ghcr.io --image=ghcr.io/${{ github.repository }} --tag=${{ github.sha }} --webhook-url=${{ secrets.HYLIUS_WEBHOOK_URL }} --webhook-token=${{ secrets.HYLIUS_API_TOKEN }} --repo=${{ github.repository }} --sha=${{ github.sha }} --ref=${{ github.ref }}
           module: .dagger
         env:
-          DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
-          _EXPERIMENTAL_DAGGER_RUNNER_HOST: ${{ secrets.DAGGER_RUNNER_HOST }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
