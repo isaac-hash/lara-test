@@ -2,10 +2,8 @@ import {
   dag,
   Container,
   Directory,
-  Secret,
   object,
   func,
-  argument,
 } from "@dagger.io/dagger";
 
 @object()
@@ -50,7 +48,7 @@ export class HyliusPipeline {
   }
 
   /** Detect project type and build a Docker image. */
-  private async buildImage(source: Directory, imageTag: string): Promise<Container> {
+  private async buildImage(source: Directory): Promise<Container> {
     const entries = await source.entries();
 
     if (entries.includes("Dockerfile")) {
