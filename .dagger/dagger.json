@@ -1,5 +1,5 @@
 {
   "name": "hylius-pipeline",
   "sdk": "typescript",
-  "engineVersion": "0.18.1"
+  "engineVersion": "0.15.4"
 }
