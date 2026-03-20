@@ -1,0 +1,10 @@
+{
+  "name": "hylius-pipeline",
+  "description": "Hylius CI/CD pipeline powered by Dagger",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {},
+  "dependencies": {
+    "@dagger.io/dagger": "^0.15.0"
+  }
+}
