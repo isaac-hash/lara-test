@@ -59,7 +59,7 @@ export class HyliusPipeline {
     // No Dockerfile — generate one with Railpack, then build
     const withDockerfile = await dag
       .container()
-      .from("node:20-alpine")
+      .from("node:20")
       // Install Railpack
       .withExec(["sh", "-c", "curl -sSL https://railpack.com/install.sh | sh"])
       .withMountedDirectory("/app", source)
