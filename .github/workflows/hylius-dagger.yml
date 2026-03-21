@@ -54,14 +54,11 @@ jobs:
           
           # Load env vars if fetched
           RAILPACK_ENV_ARGS=""
-          SECRET_ARGS=""
           if [ -s .hylius.env ]; then
             while IFS= read -r line; do
               [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-              # Extract KEY out of KEY=VALUE
-              KEY=$(echo "$line" | cut -d '=' -f 1)
-              RAILPACK_ENV_ARGS="$RAILPACK_ENV_ARGS --env $KEY"
-              SECRET_ARGS="$SECRET_ARGS --secret id=$KEY"
+              # Pass the full KEY=VALUE string seamlessly into Railpack
+              RAILPACK_ENV_ARGS="$RAILPACK_ENV_ARGS --env \"$line\""
             done < .hylius.env
           fi
 
@@ -75,7 +72,6 @@ jobs:
           docker buildx build \
             --build-arg BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend \
             -f /tmp/railpack-plan.json \
-            $SECRET_ARGS \
             --tag "$IMAGE_FULL" \
             --push \
             .
