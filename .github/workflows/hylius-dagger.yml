@@ -13,6 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Ensure Dockerfile exists
+        run: |
+          if [ ! -f "Dockerfile" ]; then
+            echo "No Dockerfile found — generating one with Nixpacks..."
+            curl -sSL https://nixpacks.com/install.sh | bash
+            nixpacks build . -o .
+            echo "Generated Dockerfile:"
+            head -5 Dockerfile
+          fi
+
       - name: Build & push image via Dagger
         uses: dagger/dagger-for-github@v7
         with:
