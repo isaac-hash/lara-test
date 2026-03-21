@@ -41,7 +41,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── Path B: No Dockerfile → use Railpack natively ──
+    # ── Path B: No Dockerfile → use Railpack natively ──
       - name: Build & push image with Railpack (no Dockerfile)
         if: hashFiles('Dockerfile') == ''
         run: |
@@ -62,7 +62,7 @@ jobs:
           IMAGE_FULL="ghcr.io/${{ github.repository }}:${{ github.sha }}"
           IMAGE_FULL=$(echo "$IMAGE_FULL" | tr '[:upper:]' '[:lower:]')
 
-          eval railpack build . --tag "$IMAGE_FULL" $RAILPACK_ENV_ARGS
+          eval railpack build . --name "$IMAGE_FULL" $RAILPACK_ENV_ARGS
 
           docker push "$IMAGE_FULL"
           echo "Pushed $IMAGE_FULL"
