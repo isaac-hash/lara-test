@@ -17,15 +17,20 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Fetch Build Env from Hylius Dashboard
+        id: fetch-env
         run: |
           if [ -n "${{ secrets.HYLIUS_WEBHOOK_URL }}" ]; then
             HYLIUS_BASE_URL=$(echo "${{ secrets.HYLIUS_WEBHOOK_URL }}" | sed 's|/api/webhooks/deploy-complete||')
             curl -s -f -H "Authorization: Bearer ${{ secrets.HYLIUS_API_TOKEN }}" \
               "$HYLIUS_BASE_URL/api/webhooks/env?repo=${{ github.repository }}" > .hylius.env || true
           fi
+          
+          ENV_STRING=""
           if [ -s .hylius.env ]; then
+            ENV_STRING=$(grep -v '^#' .hylius.env | awk 'NF' | paste -sd "," -)
             echo "Build env vars fetched successfully"
           fi
+          echo "railpack_env=$ENV_STRING" >> $GITHUB_OUTPUT
 
       # ── Path A: Dockerfile exists → use Dagger ──
       - name: Build & push via Dagger (Dockerfile found)
@@ -38,29 +43,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── Path B: No Dockerfile → use Nixpacks to build image directly ──
-      - name: Build image with Nixpacks (no Dockerfile)
+      # ── Path B: No Dockerfile → use Railpack ──
+      - name: Build & push image with Railpack (no Dockerfile)
         if: hashFiles('Dockerfile') == ''
-        run: |
-          echo "No Dockerfile found — building image directly with Nixpacks..."
-          curl -sSL https://nixpacks.com/install.sh | bash
-
-          # Load env vars if fetched
-          NIXPACKS_ENV_ARGS=""
-          if [ -s .hylius.env ]; then
-            while IFS= read -r line; do
-              [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-              NIXPACKS_ENV_ARGS="$NIXPACKS_ENV_ARGS --env $line"
-            done < .hylius.env
-          fi
-
-          IMAGE_FULL="ghcr.io/${{ github.repository }}:${{ github.sha }}"
-          IMAGE_FULL=$(echo "$IMAGE_FULL" | tr '[:upper:]' '[:lower:]')
-
-          eval nixpacks build . --name "$IMAGE_FULL" $NIXPACKS_ENV_ARGS
-
-          docker push "$IMAGE_FULL"
-          echo "Pushed $IMAGE_FULL"
+        uses: iloveitaly/github-action-railpack@master
+        with:
+          push: true
+          env: ${{ steps.fetch-env.outputs.railpack_env }}
 
       - name: Notify Hylius Dashboard
         if: hashFiles('Dockerfile') == ''
