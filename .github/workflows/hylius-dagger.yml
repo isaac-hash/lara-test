@@ -30,10 +30,23 @@ jobs:
               export $(grep -v '^#' .hylius.env | xargs) || true
             fi
             
-            # Generate Dockerfile with Nixpacks
-            nixpacks build . --out . 2>&1
+            # Generate Dockerfile with Nixpacks into a temp directory
+            nixpacks build . -o /tmp/nixpacks-output
+            
+            # Copy generated files back to project root
+            cp /tmp/nixpacks-output/Dockerfile ./Dockerfile
+            if [ -f /tmp/nixpacks-output/environment.nix ]; then
+              cp /tmp/nixpacks-output/environment.nix ./environment.nix
+            fi
+            if [ -f /tmp/nixpacks-output/.nixpacks ]; then
+              cp -r /tmp/nixpacks-output/.nixpacks ./.nixpacks
+            fi
+            
             echo "Dockerfile generated successfully"
+            echo "--- Generated Dockerfile ---"
+            head -20 Dockerfile
           fi
+
 
       - name: Build & push image via Dagger
         uses: dagger/dagger-for-github@v7
