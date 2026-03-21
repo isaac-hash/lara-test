@@ -59,8 +59,8 @@ export class HyliusPipeline {
     // then use the real BuildKit frontend image to build.
     const withPlan = await dag
       .container()
-      .from("node:20-alpine")
-      .withExec(["sh", "-c", "curl -sSL https://railpack.com/install.sh | sh"])
+      .from("ubuntu:22.04")
+      .withExec(["sh", "-c", "apt-get update && apt-get install -y curl ca-certificates && curl -sSL https://railpack.com/install.sh | bash"])
       .withMountedDirectory("/app", source)
       .withWorkdir("/app")
       .withExec(["railpack", "prepare", "/app", "--plan-out", "/app/railpack-plan.json"])
