@@ -55,23 +55,26 @@ export class HyliusPipeline {
       return dag.container().build(source);
     }
   
-    // No Dockerfile — use Railpack as a BuildKit frontend.
-    // railpack prepare generates railpack-plan.json, then a synthetic
-    // Dockerfile with #syntax tells BuildKit to use Railpack's frontend.
+    // No Dockerfile — install Railpack CLI, generate a build plan,
+    // then use the real BuildKit frontend image to build.
     const withPlan = await dag
       .container()
-      .from("ghcr.io/railwayapp/railpack:latest")
+      .from("node:20-alpine")
+      .withExec(["sh", "-c", "curl -sSL https://railpack.com/install.sh | sh"])
       .withMountedDirectory("/app", source)
+      .withWorkdir("/app")
       .withExec(["railpack", "prepare", "/app", "--plan-out", "/app/railpack-plan.json"])
       .directory("/app");
-  
+
+    // Use the railpack-frontend BuildKit frontend (this image DOES exist on GHCR)
     const withSyntheticDockerfile = withPlan.withNewFile(
       "Dockerfile",
-      "# syntax=ghcr.io/railwayapp/railpack-frontend:latest\n# This file instructs BuildKit to use Railpack's frontend.\nFROM scratch\n"
+      "# syntax=ghcr.io/railwayapp/railpack-frontend:latest\nFROM scratch\n"
     );
 
-  return dag.container().build(withSyntheticDockerfile);
-}
+    return dag.container().build(withSyntheticDockerfile);
+  }
+
 
   /** Call the Hylius webhook to trigger a VPS deployment. */
   private async notifyHylius(opts: {
