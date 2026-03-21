@@ -61,7 +61,9 @@ export class HyliusPipeline {
       .from("ubuntu:22.04")
       .withExec(["sh", "-c", "apt-get update && apt-get install -y curl ca-certificates && curl -sSL https://nixpacks.com/install.sh | bash"])
       .withDirectory("/src", source)
-      .withExec(["nixpacks", "build", "/src", "-o", "/out"]);
+      .withExec(["nixpacks", "build", "/src", "-o", "/out"])
+      .withExec(["sh", "-c", "echo '=== FILES IN /out ===' && find /out -type f | head -30"]);
+
 
     const outputDir = await nixpacksContainer.directory("/out");
 
