@@ -12,43 +12,24 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-      - name: Ensure Dockerfile exists
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Fetch Build Env from Hylius Dashboard
         run: |
-          if [ ! -f "Dockerfile" ]; then
-            echo "No Dockerfile found — generating one with Nixpacks..."
-            curl -sSL https://nixpacks.com/install.sh | bash
-            
-            # Fetch Build Env variables from Hylius Dashboard
-            if [ -n "${{ secrets.HYLIUS_WEBHOOK_URL }}" ]; then
-              HYLIUS_BASE_URL=$(echo "${{ secrets.HYLIUS_WEBHOOK_URL }}" | sed 's|/api/webhooks/deploy-complete||')
-              curl -s -f -H "Authorization: Bearer ${{ secrets.HYLIUS_API_TOKEN }}" \
-                "$HYLIUS_BASE_URL/api/webhooks/env?repo=${{ github.repository }}" > .hylius.env || true
-            fi
-            
-            # Export envs if fetched
-            if [ -s .hylius.env ]; then
-              export $(grep -v '^#' .hylius.env | xargs) || true
-            fi
-            
-            # Generate Dockerfile with Nixpacks into a temp directory
-            nixpacks build . -o /tmp/nixpacks-output
-            
-            # Copy generated files back to project root
-            cp /tmp/nixpacks-output/Dockerfile ./Dockerfile
-            if [ -f /tmp/nixpacks-output/environment.nix ]; then
-              cp /tmp/nixpacks-output/environment.nix ./environment.nix
-            fi
-            if [ -f /tmp/nixpacks-output/.nixpacks ]; then
-              cp -r /tmp/nixpacks-output/.nixpacks ./.nixpacks
-            fi
-            
-            echo "Dockerfile generated successfully"
-            echo "--- Generated Dockerfile ---"
-            head -20 Dockerfile
+          if [ -n "${{ secrets.HYLIUS_WEBHOOK_URL }}" ]; then
+            HYLIUS_BASE_URL=$(echo "${{ secrets.HYLIUS_WEBHOOK_URL }}" | sed 's|/api/webhooks/deploy-complete||')
+            curl -s -f -H "Authorization: Bearer ${{ secrets.HYLIUS_API_TOKEN }}" \
+              "$HYLIUS_BASE_URL/api/webhooks/env?repo=${{ github.repository }}" > .hylius.env || true
+          fi
+          if [ -s .hylius.env ]; then
+            echo "Build env vars fetched successfully"
           fi
 
-
-      - name: Build & push image via Dagger
+      # ── Path A: Dockerfile exists → use Dagger ──
+      - name: Build & push via Dagger (Dockerfile found)
+        if: hashFiles('Dockerfile') != ''
         uses: dagger/dagger-for-github@v7
         with:
           verb: call
@@ -56,3 +37,38 @@ jobs:
           module: .dagger
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Path B: No Dockerfile → use Nixpacks to build image directly ──
+      - name: Build image with Nixpacks (no Dockerfile)
+        if: hashFiles('Dockerfile') == ''
+        run: |
+          echo "No Dockerfile found — building image directly with Nixpacks..."
+          curl -sSL https://nixpacks.com/install.sh | bash
+
+          # Load env vars if fetched
+          NIXPACKS_ENV_ARGS=""
+          if [ -s .hylius.env ]; then
+            while IFS= read -r line; do
+              [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+              NIXPACKS_ENV_ARGS="$NIXPACKS_ENV_ARGS --env $line"
+            done < .hylius.env
+          fi
+
+          IMAGE_FULL="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          IMAGE_FULL=$(echo "$IMAGE_FULL" | tr '[:upper:]' '[:lower:]')
+
+          eval nixpacks build . --name "$IMAGE_FULL" $NIXPACKS_ENV_ARGS
+
+          docker push "$IMAGE_FULL"
+          echo "Pushed $IMAGE_FULL"
+
+      - name: Notify Hylius Dashboard
+        if: hashFiles('Dockerfile') == ''
+        run: |
+          IMAGE_FULL="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          IMAGE_FULL=$(echo "$IMAGE_FULL" | tr '[:upper:]' '[:lower:]')
+
+          curl -fsSL -X POST "${{ secrets.HYLIUS_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.HYLIUS_API_TOKEN }}" \
+            -d "{\"image\": \"$IMAGE_FULL\", \"sha\": \"${{ github.sha }}\", \"repo\": \"${{ github.repository }}\", \"ref\": \"${{ github.ref }}\"}"
