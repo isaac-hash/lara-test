@@ -25,14 +25,11 @@ jobs:
               "$HYLIUS_BASE_URL/api/webhooks/env?repo=${{ github.repository }}" > .hylius.env || true
           fi
           
-          ENV_STRING=""
           if [ -s .hylius.env ]; then
-            ENV_STRING=$(grep -v '^#' .hylius.env | awk 'NF' | paste -sd "," -)
             grep -v '^#' .hylius.env | awk 'NF' >> $GITHUB_ENV
-            echo "Build env vars fetched successfully"
+            echo "Build env vars fetched and exported successfully"
           fi
-          echo "railpack_env=$ENV_STRING" >> $GITHUB_OUTPUT
-          
+
       # ── Path A: Dockerfile exists → use Dagger ──
       - name: Build & push via Dagger (Dockerfile found)
         if: hashFiles('Dockerfile') != ''
@@ -44,13 +41,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── Path B: No Dockerfile → use Railpack ──
+      # ── Path B: No Dockerfile → use Railpack natively ──
       - name: Build & push image with Railpack (no Dockerfile)
         if: hashFiles('Dockerfile') == ''
-        uses: iloveitaly/github-action-railpack@master
-        with:
-          push: true
-          env: ${{ steps.fetch-env.outputs.railpack_env }}
+        run: |
+          echo "No Dockerfile found — installing Railpack..."
+          curl -sSL https://railpack.com/install.sh | bash
+          
+          # Load env vars if fetched
+          RAILPACK_ENV_ARGS=""
+          if [ -s .hylius.env ]; then
+            while IFS= read -r line; do
+              [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+              # Extract KEY out of KEY=VALUE and pass as --env KEY
+              KEY=$(echo "$line" | cut -d '=' -f 1)
+              RAILPACK_ENV_ARGS="$RAILPACK_ENV_ARGS --env $KEY"
+            done < .hylius.env
+          fi
+
+          IMAGE_FULL="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          IMAGE_FULL=$(echo "$IMAGE_FULL" | tr '[:upper:]' '[:lower:]')
+
+          eval railpack build . --tag "$IMAGE_FULL" $RAILPACK_ENV_ARGS
+
+          docker push "$IMAGE_FULL"
+          echo "Pushed $IMAGE_FULL"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
