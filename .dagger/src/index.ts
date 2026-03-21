@@ -48,33 +48,25 @@ export class HyliusPipeline {
   }
 
   /** Detect project type and build a Docker image. */
-  private async buildImage(source: Directory): Promise<Container> {
+ private async buildImage(source: Directory): Promise<Container> {
     const entries = await source.entries();
   
     if (entries.includes("Dockerfile")) {
       return dag.container().build(source);
     }
   
-    // No Dockerfile — install Railpack CLI, generate a build plan,
-    // then use the real BuildKit frontend image to build.
-    const withPlan = await dag
+    // No Dockerfile — use Nixpacks to auto-generate one, then build normally
+    const withDockerfile = await dag
       .container()
       .from("ubuntu:22.04")
-      .withExec(["sh", "-c", "apt-get update && apt-get install -y curl ca-certificates && curl -sSL https://railpack.com/install.sh | bash"])
+      .withExec(["sh", "-c", "apt-get update && apt-get install -y curl ca-certificates && curl -sSL https://nixpacks.com/install.sh | bash"])
       .withMountedDirectory("/app", source)
       .withWorkdir("/app")
-      .withExec(["railpack", "prepare", "/app", "--plan-out", "/app/railpack-plan.json"])
+      .withExec(["nixpacks", "build", ".", "-o", "."])
       .directory("/app");
 
-    // Use the railpack-frontend BuildKit frontend (this image DOES exist on GHCR)
-    const withSyntheticDockerfile = withPlan.withNewFile(
-      "Dockerfile",
-      "# syntax=ghcr.io/railwayapp/railpack-frontend:latest\nFROM scratch\n"
-    );
-
-    return dag.container().build(withSyntheticDockerfile);
+    return dag.container().build(withDockerfile);
   }
-
 
   /** Call the Hylius webhook to trigger a VPS deployment. */
   private async notifyHylius(opts: {
