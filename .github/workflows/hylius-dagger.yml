@@ -12,24 +12,15 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-
       - name: Ensure Dockerfile exists
         run: |
           if [ ! -f "Dockerfile" ]; then
             echo "No Dockerfile found — generating one with Nixpacks..."
             curl -sSL https://nixpacks.com/install.sh | bash
             nixpacks build . -o /tmp/nixout
-            echo "=== Nixpacks output ==="
-            ls -la /tmp/nixout/
-            if [ -f "/tmp/nixout/Dockerfile" ]; then
-              cp /tmp/nixout/Dockerfile .
-              [ -d "/tmp/nixout/.nixpacks" ] && cp -r /tmp/nixout/.nixpacks .
-              echo "Dockerfile copied successfully"
-            else
-              echo "Checking subdirectories..."
-              find /tmp/nixout -type f | head -20
-              exit 1
-            fi
+            cp /tmp/nixout/.nixpacks/Dockerfile .
+            cp -r /tmp/nixout/.nixpacks .
+            echo "Dockerfile generated successfully"
           fi
 
       - name: Build & push image via Dagger
