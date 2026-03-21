@@ -50,6 +50,8 @@ jobs:
         with:
           push: true
           env: ${{ steps.fetch-env.outputs.railpack_env }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Notify Hylius Dashboard
         if: hashFiles('Dockerfile') == ''
