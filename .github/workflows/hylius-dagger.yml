@@ -28,10 +28,11 @@ jobs:
           ENV_STRING=""
           if [ -s .hylius.env ]; then
             ENV_STRING=$(grep -v '^#' .hylius.env | awk 'NF' | paste -sd "," -)
+            grep -v '^#' .hylius.env | awk 'NF' >> $GITHUB_ENV
             echo "Build env vars fetched successfully"
           fi
           echo "railpack_env=$ENV_STRING" >> $GITHUB_OUTPUT
-
+          
       # ── Path A: Dockerfile exists → use Dagger ──
       - name: Build & push via Dagger (Dockerfile found)
         if: hashFiles('Dockerfile') != ''
