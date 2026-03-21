@@ -36,7 +36,7 @@ export class HyliusPipeline {
     const imageFull = `${image.toLowerCase()}:${tag}`;
 
     // Build the image
-    const built = await this.buildImage(source, imageFull);
+    const built = await this.buildImage(source);
 
     // Push to registry
     const digest = await built.publish(imageFull);
@@ -48,24 +48,24 @@ export class HyliusPipeline {
   }
 
   /** Detect project type and build a Docker image. */
- private async buildImage(source: Directory): Promise<Container> {
+  private async buildImage(source: Directory): Promise<Container> {
     const entries = await source.entries();
-  
+
     if (entries.includes("Dockerfile")) {
       return dag.container().build(source);
     }
-  
-    // No Dockerfile — use Nixpacks to auto-generate one, then build normally
-    const withDockerfile = await dag
+
+    // No Dockerfile — use Nixpacks to auto-generate one, then build
+    const nixpacksContainer = dag
       .container()
       .from("ubuntu:22.04")
       .withExec(["sh", "-c", "apt-get update && apt-get install -y curl ca-certificates && curl -sSL https://nixpacks.com/install.sh | bash"])
-      .withMountedDirectory("/app", source)
-      .withWorkdir("/app")
-      .withExec(["nixpacks", "build", ".", "-o", "."])
-      .directory("/app");
+      .withDirectory("/src", source)
+      .withExec(["nixpacks", "build", "/src", "-o", "/out"]);
 
-    return dag.container().build(withDockerfile);
+    const outputDir = await nixpacksContainer.directory("/out");
+
+    return dag.container().build(outputDir);
   }
 
   /** Call the Hylius webhook to trigger a VPS deployment. */
