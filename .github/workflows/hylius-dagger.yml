@@ -15,11 +15,16 @@ jobs:
       - name: Ensure Dockerfile exists
         run: |
           if [ ! -f "Dockerfile" ]; then
-            echo "No Dockerfile found — generating one with Nixpacks..."
-            curl -sSL https://nixpacks.com/install.sh | bash
-            nixpacks build . -o /tmp/nixout
-            cp /tmp/nixout/.nixpacks/Dockerfile .
-            cp -r /tmp/nixout/.nixpacks .
+           echo "No Dockerfile found — generating one with Railpack..."
+            curl -sSL https://railpack.com/install.sh | bash
+            
+            # Fetch Build Env variables from Hylius Dashboard
+            HYLIUS_BASE_URL=$(echo "\${{ secrets.HYLIUS_WEBHOOK_URL }}" | sed 's|/api/webhooks/deploy-complete||')
+            curl -s -H "Authorization: Bearer \${{ secrets.HYLIUS_API_TOKEN }}" "$HYLIUS_BASE_URL/api/webhooks/env?repo=\${{ github.repository }}" > .hylius.env
+            
+            # Export envs and generate Dockerfile
+            export $(grep -v '^#' .hylius.env | xargs)
+            railpack generate
             echo "Dockerfile generated successfully"
           fi
 
