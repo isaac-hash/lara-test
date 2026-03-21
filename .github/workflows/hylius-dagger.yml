@@ -41,7 +41,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # ── Path B: No Dockerfile → use Railpack natively ──
+      # ── Path B: No Dockerfile → use Railpack natively ──
+      - name: Set up Docker Buildx
+        if: hashFiles('Dockerfile') == ''
+        uses: docker/setup-buildx-action@v3
+
       - name: Build & push image with Railpack (no Dockerfile)
         if: hashFiles('Dockerfile') == ''
         run: |
@@ -50,21 +54,32 @@ jobs:
           
           # Load env vars if fetched
           RAILPACK_ENV_ARGS=""
+          SECRET_ARGS=""
           if [ -s .hylius.env ]; then
             while IFS= read -r line; do
               [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-              # Extract KEY out of KEY=VALUE and pass as --env KEY
+              # Extract KEY out of KEY=VALUE
               KEY=$(echo "$line" | cut -d '=' -f 1)
               RAILPACK_ENV_ARGS="$RAILPACK_ENV_ARGS --env $KEY"
+              SECRET_ARGS="$SECRET_ARGS --secret id=$KEY"
             done < .hylius.env
           fi
 
           IMAGE_FULL="ghcr.io/${{ github.repository }}:${{ github.sha }}"
           IMAGE_FULL=$(echo "$IMAGE_FULL" | tr '[:upper:]' '[:lower:]')
 
-          eval railpack build . --name "$IMAGE_FULL" $RAILPACK_ENV_ARGS
+          # Generate Railpack build plan
+          railpack prepare $RAILPACK_ENV_ARGS --plan-out /tmp/railpack-plan.json .
 
-          docker push "$IMAGE_FULL"
+          # Build and push using docker buildx with the generated plan
+          docker buildx build \
+            --build-arg BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend \
+            -f /tmp/railpack-plan.json \
+            $SECRET_ARGS \
+            --tag "$IMAGE_FULL" \
+            --push \
+            .
+          
           echo "Pushed $IMAGE_FULL"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
