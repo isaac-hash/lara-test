@@ -5,6 +5,6 @@
   "main": "src/index.ts",
   "scripts": {},
   "dependencies": {
-    "@dagger.io/dagger": "^0.15.0"
+    "@dagger.io/dagger": "^0.15.4"
   }
 }

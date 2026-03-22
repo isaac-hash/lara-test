@@ -19,6 +19,7 @@ export class HyliusPipeline {
     repo: string,
     sha: string,
     ref: string,
+    prNumber: string,
     githubToken: Secret,
   ): Promise<string> {
     const imageFull = `${image.toLowerCase()}:${tag}`;
@@ -32,7 +33,7 @@ export class HyliusPipeline {
     const digest = await built.publish(imageFull);
 
     // Notify Hylius dashboard
-    await this.notifyHylius({ webhookUrl, webhookToken, image: imageFull, sha, repo, ref });
+    await this.notifyHylius({ webhookUrl, webhookToken, image: imageFull, sha, repo, ref, prNumber });
 
     return `Published ${imageFull} @ ${digest}`;
   }
@@ -44,12 +45,14 @@ export class HyliusPipeline {
     sha: string;
     repo: string;
     ref: string;
+    prNumber: string;
   }): Promise<void> {
     const payload = JSON.stringify({
       image: opts.image,
       sha: opts.sha,
       repo: opts.repo,
       ref: opts.ref,
+      prNumber: opts.prNumber,
     });
 
     await dag
@@ -61,7 +64,6 @@ export class HyliusPipeline {
         "-H", "Content-Type: application/json",
         "-H", `Authorization: Bearer ${opts.webhookToken}`,
         "-d", payload,
-      ])
-      .sync();
+      ]).sync();
   }
 }
