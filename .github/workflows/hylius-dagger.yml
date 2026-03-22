@@ -3,7 +3,7 @@ name: Hylius Dagger CI
 on:
   push:
     branches: [main]
-  pull_request:         
+  pull_request:
     branches: [main]
 
 jobs:
@@ -38,12 +38,12 @@ jobs:
         uses: dagger/dagger-for-github@v7
         with:
           verb: call
-          args: build-and-push --source=. --registry=ghcr.io --image=ghcr.io/${{ github.repository }} --tag=${{ github.sha }} --webhook-url=${{ secrets.HYLIUS_WEBHOOK_URL }} --webhook-token=${{ secrets.HYLIUS_API_TOKEN }} --repo=${{ github.repository }} --sha=${{ github.sha }} --ref=${{ github.ref }} --github-token=env:GITHUB_TOKEN
+          args: build-and-push --source=. --registry=ghcr.io --image=ghcr.io/${{ github.repository }} --tag=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }} --webhook-url=${{ secrets.HYLIUS_WEBHOOK_URL }} --webhook-token=${{ secrets.HYLIUS_API_TOKEN }} --repo=${{ github.repository }} --sha=${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }} --ref=${{ github.ref }} --pr-number="${{ github.event.pull_request.number }}" --github-token=env:GITHUB_TOKEN
           module: .dagger
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # ── Path B: No Dockerfile → use Railpack natively ──
+      # ── Path B: No Dockerfile → use Railpack natively ──
       - name: Set up Docker Buildx
         if: hashFiles('Dockerfile') == ''
         uses: docker/setup-buildx-action@v3
@@ -58,24 +58,17 @@ jobs:
           RAILPACK_ENV_ARGS=""
           SECRET_ARGS=""
           if [ -s .hylius.env ]; then
-            # Strip all invisible carriage returns globally
-            sed -i 's/\r$//' .hylius.env
-            
-            while IFS= read -r line || [ -n "$line" ]; do
+            while IFS= read -r line; do
               [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-              
-              # Extract KEY out of KEY=VALUE and trim any surrounding whitespace
-              KEY=$(echo "$line" | cut -d '=' -f 1 | xargs)
-              
-              # Failsafe: if the KEY evaluated to entirely blank, skip it!
-              [[ -z "$KEY" ]] && continue
-              
+              # Extract KEY out of KEY=VALUE
+              KEY=$(echo "$line" | cut -d '=' -f 1)
               RAILPACK_ENV_ARGS="$RAILPACK_ENV_ARGS --env $KEY"
               SECRET_ARGS="$SECRET_ARGS --secret id=$KEY,env=$KEY"
             done < .hylius.env
           fi
 
-          IMAGE_FULL="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          IMAGE_TAG=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+          IMAGE_FULL="ghcr.io/${{ github.repository }}:$IMAGE_TAG"
           IMAGE_FULL=$(echo "$IMAGE_FULL" | tr '[:upper:]' '[:lower:]')
 
           # Generate Railpack build plan
@@ -97,10 +90,12 @@ jobs:
       - name: Notify Hylius Dashboard
         if: hashFiles('Dockerfile') == ''
         run: |
-          IMAGE_FULL="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          IMAGE_TAG=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+          IMAGE_FULL="ghcr.io/${{ github.repository }}:$IMAGE_TAG"
           IMAGE_FULL=$(echo "$IMAGE_FULL" | tr '[:upper:]' '[:lower:]')
+          SHA_VAL=${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
           curl -fsSL -X POST "${{ secrets.HYLIUS_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.HYLIUS_API_TOKEN }}" \
-            -d "{\"image\": \"$IMAGE_FULL\", \"sha\": \"${{ github.sha }}\", \"repo\": \"${{ github.repository }}\", \"ref\": \"${{ github.ref }}\"}"
+            -d "{\"image\": \"$IMAGE_FULL\", \"sha\": \"$SHA_VAL\", \"repo\": \"${{ github.repository }}\", \"ref\": \"${{ github.ref }}\", \"prNumber\": \"${{ github.event.pull_request.number }}\"}"
