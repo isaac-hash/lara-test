@@ -56,13 +56,19 @@ jobs:
           RAILPACK_ENV_ARGS=""
           SECRET_ARGS=""
           if [ -s .hylius.env ]; then
-            while IFS= read -r line; do
+            # Strip all invisible carriage returns globally
+            sed -i 's/\r$//' .hylius.env
+            
+            while IFS= read -r line || [ -n "$line" ]; do
               [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-              # Extract KEY out of KEY=VALUE
-              KEY=$(echo "$line" | cut -d '=' -f 1)
-              RAILPACK_ENV_ARGS="$RAILPACK_ENV_ARGS --env $KEY"
               
-              # CRITICAL FIX: explicitly declare ",env=$KEY" to force BuildKit to read from the shell!
+              # Extract KEY out of KEY=VALUE and trim any surrounding whitespace
+              KEY=$(echo "$line" | cut -d '=' -f 1 | xargs)
+              
+              # Failsafe: if the KEY evaluated to entirely blank, skip it!
+              [[ -z "$KEY" ]] && continue
+              
+              RAILPACK_ENV_ARGS="$RAILPACK_ENV_ARGS --env $KEY"
               SECRET_ARGS="$SECRET_ARGS --secret id=$KEY,env=$KEY"
             done < .hylius.env
           fi
